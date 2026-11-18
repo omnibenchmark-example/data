@@ -1,38 +1,40 @@
 import argparse
 import os
 
+# Output ids this module can write, and the file name each one gets when the
+# benchmark does not say (api < 0.8.0).
+LEGACY_NAMES = {
+    "data.counts": "{name}.txt.gz",
+    "data.meta": "{name}.meta.json",
+    "data.data_specific_params": "{name}_params.txt",
+}
+
 
 def create_file(file_name):
+    os.makedirs(os.path.dirname(file_name) or ".", exist_ok=True)
     with open(file_name, 'w') as outfile:
         outfile.write(f'1. Created dataset file {file_name}.\n')
 
 
-def materialize_dataset(output_dir, name):
-    # Create the output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Create dataset files
-    data_counts_file = os.path.join(output_dir, f'{name}.txt.gz')
-    data_meta_file = os.path.join(output_dir, f'{name}.meta.json')
-    data_specific_params_file = os.path.join(output_dir, f'{name}_params.txt')
-
-    create_file(data_counts_file)
-    create_file(data_meta_file)
-    create_file(data_specific_params_file)
-
-
 def main():
-    # Create argument parser
     parser = argparse.ArgumentParser(description='Materialize dataset files.')
-
-    # Add arguments
     parser.add_argument('--output_dir', type=str, help='output directory where dataset files will be saved.')
     parser.add_argument('--name', type=str, help='name of the dataset')
+    # api >= 0.8.0: one `--output id=PATH` per output the stage declares.
+    parser.add_argument('--output', action='append', default=[], help='id=PATH of an output to write')
+    args, _ = parser.parse_known_args()
 
-    # Parse arguments
-    args = parser.parse_args()
+    outputs = dict(o.split("=", 1) for o in args.output)
+    if not outputs:
+        outputs = {
+            output_id: os.path.join(args.output_dir, pattern.format(name=args.name))
+            for output_id, pattern in LEGACY_NAMES.items()
+        }
 
-    materialize_dataset(args.output_dir, args.name)
+    for output_id, path in outputs.items():
+        if output_id not in LEGACY_NAMES:
+            raise SystemExit(f"unknown output id '{output_id}'; this module writes {sorted(LEGACY_NAMES)}")
+        create_file(path)
 
 
 if __name__ == "__main__":
